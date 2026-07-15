@@ -6,17 +6,35 @@ build-backend = "maturin"
 name = "bpe_rs"
 requires-python = ">=3.8"
 dependencies = ["regex >= 2023.0"]
+description = "High-performance Byte Pair Encoding (BPE) tokenizer in Rust with Python bindings"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Vaibhav", email = "vaibhav@example.com"}
+]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries",
 ]
+keywords = ["bpe", "tokenizer", "nlp", "machine-learning", "rust", "pyo3"]
 dynamic = ["version"]
+urls = {Homepage = "https://github.com/vvaibhavv11/bpe_rs", Repository = "https://github.com/vvaibhavv11/bpe_rs", Issues = "https://github.com/vvaibhavv11/bpe_rs/issues"}
 
 [dependency-groups]
-dev = [
-    "maturin>=1.12,<2.0",
-]
+dev = ["maturin>=1.12,<2.0"]
 
 [tool.maturin]
 bindings = "pyo3"
@@ -25,10 +43,10 @@ python-source = "python"
 
 [tool.uv]
 cache-keys = [
-    { file = "pyproject.toml" },
-    { file = "Cargo.toml" },
-    { file = "Cargo.lock" },
-    { file = "python/bpe_rs/__init__.py" },
-    { file = "python/bpe_rs/pre_tokenize.py" },
-    { file = "src/**/*.rs" },
+    {file = "pyproject.toml"},
+    {file = "Cargo.toml"},
+    {file = "Cargo.lock"},
+    {file = "python/bpe_rs/__init__.py"},
+    {file = "python/bpe_rs/pre_tokenize.py"},
+    {file = "src/**/*.rs"},
 ]
