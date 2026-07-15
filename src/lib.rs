@@ -11,6 +11,5 @@ fn bpe_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(tokenizer::encode_train, m)?)?;
     m.add_function(wrap_pyfunction!(tokenizer::encode, m)?)?;
     m.add_function(wrap_pyfunction!(tokenizer::decode_string, m)?)?;
-    // m.add_function(wrap_pyfunction!(encoder::save_vocab_list, m)?)?;
     Ok(())
 }

@@ -1,7 +1,7 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs;
 
-use pyo3::exceptions::PyIOError;
+use pyo3::exceptions::{PyIOError, PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 
@@ -120,7 +120,7 @@ fn bpe_merge(ids: &[u16], pairs: Pair, idx: u16) -> Vec<u16> {
             i += 1;
         }
     }
-    return new_ids;
+    new_ids
 }
 
 fn save_merges_record(merges_record: &[Merge]) -> std::io::Result<()> {
@@ -166,7 +166,7 @@ fn save_vocab_list_record(vocab_list: &VocabList) -> std::io::Result<()> {
         let separator = if index + 1 == ids.len() { "" } else { "," };
         let bytes = vocab_list
             .get(id)
-            .unwrap()
+            .expect("vocab_list should contain all keys in iteration")
             .iter()
             .map(|byte| byte.to_string())
             .collect::<Vec<String>>()
@@ -201,7 +201,6 @@ pub(crate) fn encode_train(chunks: Vec<String>) -> PyResult<Vec<Merge>> {
     let mut next_idx: u16 = 256;
     loop {
         if merges_record.len() >= MAX_MERGES {
-            println!("reached max_merges={MAX_MERGES}");
             break;
         }
 
@@ -211,8 +210,6 @@ pub(crate) fn encode_train(chunks: Vec<String>) -> PyResult<Vec<Merge>> {
         if freq < 3 {
             break;
         }
-
-        println!("next_idx={next_idx}");
 
         let mut next_data: HashMap<Vec<u16>, usize> = HashMap::with_capacity(data.len());
         for (chunk, weight) in data {
@@ -263,23 +260,18 @@ pub(crate) fn encode(s: Vec<String>, merges: Vec<Merge>) -> Vec<u16> {
 }
 
 #[pyfunction]
-pub(crate) fn decode_string(ids: Vec<u16>, vocab_list: VocabList) -> String {
-    let decode_byte: Vec<u8> = ids
-        .iter()
-        .flat_map(|id| vocab_list.get(id).unwrap())
-        .copied()
-        .collect();
-    let text = String::from_utf8(decode_byte);
-    return text.unwrap();
+pub(crate) fn decode_string(ids: Vec<u16>, vocab_list: VocabList) -> PyResult<String> {
+    let mut decode_byte = Vec::with_capacity(ids.len() * 4);
+    for id in &ids {
+        let bytes = vocab_list.get(id).ok_or_else(|| {
+            PyKeyError::new_err(format!("unknown token id {id} in vocab_list"))
+        })?;
+        decode_byte.extend_from_slice(bytes);
+    }
+    String::from_utf8(decode_byte).map_err(|e| {
+        PyValueError::new_err(format!("decoded bytes are not valid UTF-8: {e}"))
+    })
 }
-
-// #[pyfunction]
-// pub(crate) fn save_vocab_list(merges: Vec<Merge>) -> PyResult<()> {
-//     let vocab_list = build_vocab_list(&merges);
-//     save_vocab_list_record(&vocab_list)
-//         .map_err(|err| PyIOError::new_err(format!("failed to write {VOCAB_LIST_FILE}: {err}")))?;
-//     Ok(())
-// }
 
 #[cfg(test)]
 mod tests {
