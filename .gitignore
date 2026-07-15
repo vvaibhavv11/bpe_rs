@@ -1,3 +1,6 @@
 /target
 /dataset
 .venv
+python/bpe_rs/*.so
+python/bpe_rs/*.pyd
+python/bpe_rs/_bpe_rs.*

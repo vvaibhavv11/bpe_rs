@@ -6,9 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import regex as re
-
 import bpe_rs
+from bpe_rs import pre_tokenize
 
 ROOT = Path(__file__).resolve().parent.parent
 Merge = Tuple[Tuple[int, int], int]
@@ -18,31 +17,8 @@ EXPECTED_EXPORTS = (
     "encode_train",
     "encode",
     "decode_string",
+    "pre_tokenize",
 )
-# directly taken from the tiktoken library by openai https://github.com/openai/tiktoken but tiktoken does not contain the training code
-pat_str = "|".join(
-    [
-        r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
-        r"""[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?""",
-        r"""\p{N}{1,3}""",
-        r""" ?[^\s\p{L}\p{N}]+[\r\n/]*""",
-        r"""\s*[\r\n]+""",
-        r"""\s+(?!\S)""",
-        r"""\s+""",
-    ]
-)
-TOKEN_RE = re.compile(pat_str)
-
-
-def summarize_text(text: str, preview: int = 120) -> str:
-    compact = " ".join(text.split())
-    if len(compact) <= preview:
-        return compact
-    return f"{compact[:preview]}..."
-
-
-def split_text_file(text_file: str | Path) -> list[str]:
-    return TOKEN_RE.findall(Path(text_file).read_text(encoding="utf-8"))
 
 
 def load_merges_record(path: str | Path) -> list[Merge]:
@@ -88,7 +64,7 @@ def main() -> int:
     print(f"build_info={bpe_rs.build_info()}")
 
     if args.dataset.exists():
-        split_text = split_text_file(args.dataset)
+        split_text = bpe_rs.pre_tokenize.split_text_file(args.dataset)
         merges = bpe_rs.encode_train(split_text)
 
         merges_file = ROOT / "data" / "merges_record.json"

@@ -5,6 +5,7 @@ build-backend = "maturin"
 [project]
 name = "bpe_rs"
 requires-python = ">=3.8"
+dependencies = ["regex >= 2023.0"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
@@ -19,12 +20,15 @@ dev = [
 
 [tool.maturin]
 bindings = "pyo3"
+module-name = "bpe_rs._bpe_rs"
+python-source = "python"
 
 [tool.uv]
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "Cargo.toml" },
     { file = "Cargo.lock" },
-    { file = "bpe_rs.pyi" },
+    { file = "python/bpe_rs/__init__.py" },
+    { file = "python/bpe_rs/pre_tokenize.py" },
     { file = "src/**/*.rs" },
 ]

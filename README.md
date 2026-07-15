@@ -25,6 +25,16 @@ maturin develop
 
 ## Usage
 
+### Pre-tokenization
+Before training or encoding, split text into chunks using the tiktoken-compatible regex:
+```python
+from bpe_rs import pre_tokenize
+
+chunks = pre_tokenize.split_text("hello world! this is a test.")
+# or from a file:
+chunks = pre_tokenize.split_text_file("dataset.txt")
+```
+
 ### Training the tokenizer
 ```python
 import bpe_rs
@@ -81,10 +91,11 @@ def decode_string(ids: list[int], vocab_list: dict[int, list[int]]) -> str: ...
 
 ## Project structure
 
-- `src/lib.rs`: Python module definition and function exports.
-- `src/encoder.rs`: Core BPE logic.
+- `src/lib.rs`: Rust module definition and function exports.
+- `src/tokenizer.rs`: Core BPE logic.
+- `python/bpe_rs/__init__.py`: Public Python API (re-exports from Rust + pre_tokenize).
+- `python/bpe_rs/pre_tokenize.py`: Tiktoken-compatible pre-tokenizer (regex splitting).
 - `Cargo.toml`: Rust dependencies.
 - `pyproject.toml`: Python project configuration.
-- `bpe_rs.pyi`: Type hints for the Python module.
 - `data/`: Precomputed merges + vocab JSON files.
 - `tests/test_bindings.py`: Python driver test.
