@@ -1,6 +1,6 @@
 [package]
 name = "bpe_rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "High-performance Byte Pair Encoding (BPE) tokenizer in Rust with Python bindings"
 license = "MIT"

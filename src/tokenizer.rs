@@ -244,19 +244,72 @@ pub(crate) fn encode_train(chunks: Vec<String>) -> PyResult<Vec<Merge>> {
     Ok(merges_record)
 }
 #[pyfunction]
-pub(crate) fn encode(s: Vec<String>, merges: Vec<Merge>) -> Vec<u16> {
-    let mut s_utf8: Vec<Vec<u16>> = s
-        .into_iter()
-        .map(|chunk| chunk.into_bytes().into_iter().map(u16::from).collect())
-        .collect();
+pub(crate) fn encode(py: Python<'_>, s: Vec<String>, merges: Vec<Merge>) -> Vec<u16> {
+    py.detach(|| encode_chunks(&s, &merges))
+}
 
-    for ((p0, p1), id) in merges {
-        for chunk in s_utf8.iter_mut() {
-            *chunk = bpe_merge(chunk, (p0, p1), id);
-        }
+/// Encodes every distinct chunk once, in parallel, then stitches the results
+/// back together in the original order.
+fn encode_chunks(chunks: &[String], merges: &[Merge]) -> Vec<u16> {
+    let mut ranks: HashMap<Pair, Vec<usize>> = HashMap::new();
+    for (rank, &(pair, _)) in merges.iter().enumerate() {
+        ranks.entry(pair).or_default().push(rank);
     }
 
-    s_utf8.into_iter().flatten().collect()
+    let mut index: HashMap<&str, usize> = HashMap::new();
+    let mut unique: Vec<&str> = Vec::new();
+    let slots: Vec<usize> = chunks
+        .iter()
+        .map(|chunk| {
+            *index.entry(chunk.as_str()).or_insert_with(|| {
+                unique.push(chunk);
+                unique.len() - 1
+            })
+        })
+        .collect();
+
+    let encoded: Vec<Vec<u16>> = unique
+        .par_iter()
+        .map(|chunk| encode_chunk(chunk, &ranks, merges))
+        .collect();
+
+    let total = slots.iter().map(|&i| encoded[i].len()).sum();
+    let mut ids = Vec::with_capacity(total);
+    for i in slots {
+        ids.extend_from_slice(&encoded[i]);
+    }
+    ids
+}
+
+/// Same result as applying every merge to the chunk in order, but skips the
+/// merges whose pair isn't in the chunk: repeatedly apply the earliest merge
+/// (after the last one applied) whose pair is present.
+fn encode_chunk(chunk: &str, ranks: &HashMap<Pair, Vec<usize>>, merges: &[Merge]) -> Vec<u16> {
+    let mut ids: Vec<u16> = chunk.bytes().map(u16::from).collect();
+    let mut next_rank = 0;
+
+    loop {
+        let mut best: Option<usize> = None;
+        for window in ids.windows(2) {
+            if let Some(pair_ranks) = ranks.get(&(window[0], window[1])) {
+                let i = pair_ranks.partition_point(|&r| r < next_rank);
+                if let Some(&rank) = pair_ranks.get(i) {
+                    if best.is_none_or(|b| rank < b) {
+                        best = Some(rank);
+                    }
+                }
+            }
+        }
+
+        let Some(rank) = best else {
+            break;
+        };
+        let (pair, id) = merges[rank];
+        ids = bpe_merge(&ids, pair, id);
+        next_rank = rank + 1;
+    }
+
+    ids
 }
 
 #[pyfunction]
@@ -276,10 +329,61 @@ pub(crate) fn decode_string(ids: Vec<u16>, vocab_list: VocabList) -> PyResult<St
 #[cfg(test)]
 mod tests {
     use super::{
-        bpe_merge, build_pair_heap, chunk_contains_pair, collapse_chunk_counts, get_stat,
-        pop_most_frequent_pair, update_pair_counts,
+        Merge, bpe_merge, build_pair_heap, chunk_contains_pair, collapse_chunk_counts,
+        encode_chunks, get_stat, pop_most_frequent_pair, update_pair_counts,
     };
     use std::collections::HashMap;
+
+    /// The original encode: every merge applied to every chunk, in order.
+    fn encode_reference(chunks: &[String], merges: &[Merge]) -> Vec<u16> {
+        let mut ids: Vec<Vec<u16>> = chunks
+            .iter()
+            .map(|chunk| chunk.bytes().map(u16::from).collect())
+            .collect();
+        for &(pair, id) in merges {
+            for chunk in ids.iter_mut() {
+                *chunk = bpe_merge(chunk, pair, id);
+            }
+        }
+        ids.into_iter().flatten().collect()
+    }
+
+    #[test]
+    fn encode_chunks_matches_reference() {
+        let (a, b, c, space) = (b'a' as u16, b'b' as u16, b'c' as u16, b' ' as u16);
+        let merges: Vec<Merge> = vec![
+            ((a, a), 256), // overlapping runs: "aaa" -> [256, a]
+            ((a, b), 257),
+            ((256, 256), 258), // only possible after an earlier merge
+            ((space, a), 259),
+            ((257, c), 260),
+            ((c, a), 261), // competes with (257, c) for the same 'c'
+            ((259, 257), 262),
+            ((b, a), 263),
+        ];
+
+        // Deterministic pseudo-random chunks over a small alphabet, with repeats.
+        let alphabet = [b'a', b'b', b'c', b' '];
+        let mut state: u32 = 12345;
+        let mut chunks: Vec<String> = Vec::new();
+        for _ in 0..2000 {
+            state = state.wrapping_mul(1103515245).wrapping_add(12345);
+            let len = 1 + (state >> 16) as usize % 9;
+            let chunk: String = (0..len)
+                .map(|_| {
+                    state = state.wrapping_mul(1103515245).wrapping_add(12345);
+                    alphabet[(state >> 16) as usize % alphabet.len()] as char
+                })
+                .collect();
+            chunks.push(chunk);
+        }
+        chunks.extend(["aaaa", "aaaaaaa", " abc", "abcabc", "", "é ü"].map(String::from));
+
+        assert_eq!(
+            encode_chunks(&chunks, &merges),
+            encode_reference(&chunks, &merges)
+        );
+    }
 
     #[test]
     fn collapse_chunk_counts_merges_duplicates() {
